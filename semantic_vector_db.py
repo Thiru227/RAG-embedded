@@ -1,9 +1,3 @@
-"""
-Semantic Vector DB with Sentence Transformers
-==============================================
-Uses real embeddings for semantic understanding
-Accuracy: 80-85% (up from 65-70%)
-"""
 
 from typing import List, Tuple
 import numpy as np
@@ -12,25 +6,9 @@ import pickle
 import os
 
 class SemanticVectorDB:
-    """
-    Advanced retrieval using sentence embeddings for semantic search
-    
-    Features:
-    - Understands meaning, not just keywords
-    - "admission fee" matches "cost of enrollment"
-    - "courses offered" matches "available programs"
-    - Much better accuracy than keyword/TF-IDF
-    """
+    """Advanced retrieval using sentence embeddings for semantic search"""
     
     def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
-        """
-        Initialize semantic vector DB
-        
-        Args:
-            model_name: Hugging Face model to use
-                - 'all-MiniLM-L6-v2': Fast, small (80MB), good quality
-                - 'all-mpnet-base-v2': Slower, larger (420MB), best quality
-        """
         self.documents = []
         self.embeddings = None
         self.model_name = model_name
@@ -40,19 +18,11 @@ class SemanticVectorDB:
         print(f"🔄 Loading sentence transformer model: {model_name}")
         print("   (This takes 2-3 seconds on first load...)")
         
-        # Load model
         self.model = SentenceTransformer(model_name)
-        
         print(f"✓ Model loaded successfully")
     
     def add_documents(self, docs: List[str], use_cache: bool = True):
-        """
-        Add documents and create embeddings
-        
-        Args:
-            docs: List of documents to add
-            use_cache: Try to load from cache if available
-        """
+        """Add documents and create embeddings"""
         self.documents.extend(docs)
         
         # Try to load from cache
@@ -104,90 +74,43 @@ class SemanticVectorDB:
         print(f"✓ Generated embeddings (shape: {self.embeddings.shape})")
     
     def search(self, query: str, top_k: int = 3) -> List[str]:
-        """
-        Semantic search using cosine similarity
-        
-        Args:
-            query: User's search query
-            top_k: Number of results to return
-            
-        Returns:
-            List of most relevant documents
-        """
+        """Semantic search using cosine similarity"""
         if not self.documents or self.embeddings is None:
             return []
         
-        # Encode query
-        query_embedding = self.model.encode(
-            [query],
-            convert_to_numpy=True,
-            show_progress_bar=False
-        )[0]
+        query_embedding = self.model.encode([query], convert_to_numpy=True, show_progress_bar=False)[0]
         
         # Calculate cosine similarity
-        # Normalize vectors
         query_norm = query_embedding / np.linalg.norm(query_embedding)
         doc_norms = self.embeddings / np.linalg.norm(self.embeddings, axis=1, keepdims=True)
-        
-        # Cosine similarity
         similarities = np.dot(doc_norms, query_norm)
         
-        # Get top k indices
         top_indices = np.argsort(similarities)[-top_k:][::-1]
         
-        # Debug info
         if len(top_indices) > 0:
             print(f"🔍 Semantic search: '{query}' → Top similarity: {similarities[top_indices[0]]:.3f}")
         
         return [self.documents[i] for i in top_indices]
     
     def search_with_scores(self, query: str, top_k: int = 3) -> List[Tuple[float, str]]:
-        """
-        Search and return documents with similarity scores
-        
-        Returns:
-            List of (score, document) tuples
-        """
+        """Search and return documents with similarity scores"""
         if not self.documents or self.embeddings is None:
             return []
         
-        query_embedding = self.model.encode(
-            [query],
-            convert_to_numpy=True,
-            show_progress_bar=False
-        )[0]
+        query_embedding = self.model.encode([query], convert_to_numpy=True, show_progress_bar=False)[0]
         
-        # Calculate similarities
         query_norm = query_embedding / np.linalg.norm(query_embedding)
         doc_norms = self.embeddings / np.linalg.norm(self.embeddings, axis=1, keepdims=True)
         similarities = np.dot(doc_norms, query_norm)
         
-        # Get top k
         top_indices = np.argsort(similarities)[-top_k:][::-1]
-        
         return [(similarities[i], self.documents[i]) for i in top_indices]
 
 
 class HybridVectorDB:
-    """
-    Hybrid search combining keyword (TF-IDF) and semantic search
-    
-    Best of both worlds:
-    - Keyword search catches exact matches
-    - Semantic search understands meaning
-    - Combined scoring for optimal results
-    
-    Accuracy: 85-88%
-    """
+    """Hybrid search combining keyword (TF-IDF) and semantic search"""
     
     def __init__(self, tfidf_weight: float = 0.3, semantic_weight: float = 0.7):
-        """
-        Initialize hybrid search
-        
-        Args:
-            tfidf_weight: Weight for TF-IDF scores (0-1)
-            semantic_weight: Weight for semantic scores (0-1)
-        """
         from vector_db import ImprovedVectorDB
         
         self.tfidf_db = ImprovedVectorDB()
@@ -201,40 +124,25 @@ class HybridVectorDB:
     
     @property
     def documents(self):
-        """Get documents from semantic DB"""
         return self.semantic_db.documents
     
     def add_documents(self, docs: List[str], use_cache: bool = True):
         """Add documents to both retrieval systems"""
         print(f"📚 Adding {len(docs)} documents to hybrid system...")
-        
-        # Add to both systems
         self.tfidf_db.add_documents(docs)
         self.semantic_db.add_documents(docs, use_cache=use_cache)
-        
         print(f"✓ Hybrid system ready with {len(self.documents)} documents")
     
     def search(self, query: str, top_k: int = 3) -> List[str]:
-        """
-        Hybrid search combining TF-IDF and semantic similarity
-        
-        Process:
-        1. Get top 2*top_k results from each method
-        2. Normalize scores from both
-        3. Combine with weighted average
-        4. Re-rank and return top k
-        """
+        """Hybrid search combining TF-IDF and semantic similarity"""
         if not self.documents:
             return []
         
-        # Get more candidates from each method
         candidate_k = min(top_k * 3, len(self.documents))
         
-        # Get results from both methods with scores
         tfidf_results = self.tfidf_db.search_with_scores(query, top_k=candidate_k)
         semantic_results = self.semantic_db.search_with_scores(query, top_k=candidate_k)
         
-        # Normalize scores to 0-1 range
         def normalize_scores(results):
             if not results:
                 return {}
@@ -253,7 +161,6 @@ class HybridVectorDB:
         tfidf_norm = normalize_scores(tfidf_results)
         semantic_norm = normalize_scores(semantic_results)
         
-        # Combine scores
         all_docs = set(tfidf_norm.keys()) | set(semantic_norm.keys())
         combined_scores = []
         
@@ -263,10 +170,8 @@ class HybridVectorDB:
             combined_score = tfidf_score + semantic_score
             combined_scores.append((combined_score, doc))
         
-        # Sort by combined score
         combined_scores.sort(reverse=True, key=lambda x: x[0])
         
-        # Debug info
         if combined_scores:
             print(f"🔀 Hybrid search: '{query}' → Top score: {combined_scores[0][0]:.3f}")
         
@@ -282,7 +187,6 @@ class HybridVectorDB:
         tfidf_results = self.tfidf_db.search_with_scores(query, top_k=candidate_k)
         semantic_results = self.semantic_db.search_with_scores(query, top_k=candidate_k)
         
-        # Normalize and combine (same as above)
         def normalize_scores(results):
             if not results:
                 return {}
